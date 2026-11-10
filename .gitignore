@@ -1,0 +1,5 @@
+clean_data.csv
+enriched_data.csv
+ticket_summary_report.csv
+venv/
+__pycache__/
