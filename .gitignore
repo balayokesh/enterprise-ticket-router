@@ -1,3 +1,4 @@
 clean_data.csv
+enriched_data.csv
 venv/
 __pycache__/
