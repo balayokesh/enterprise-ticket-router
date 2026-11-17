@@ -43,19 +43,9 @@ A robust, production-grade Python data pipeline that ingests customer support ti
 
 ---
 
-## Running the Pipeline in Order
+## Running the Pipeline
 
-Execute the pipeline modules sequentially to process your tickets from raw data to final analytics:
-1. Clean the input csv file (data.csv -> clean_data.csv)
+Execute the script to process your tickets from raw data to final analytics:
    ```bash
-   python pipeline.py
-   ```
-2. AI Enrichment & Triage
-   Processes the support records through the LLM and outputs `enriched_data.csv`.
-   ```bash
-   python ai_enrichment.py
-   ```  
-3. Generate analytics/report from the `enriched_data.csv`
-   ```bash
-   python reporting.py
+   python main.py
    ```
