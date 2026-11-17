@@ -28,34 +28,17 @@ A robust, production-grade Python data pipeline that ingests customer support ti
    pip install -r requirements.txt
    ```
 
-3. **Configure Environment Variables:**
-   Set your OpenRouter API key and the OpenAI base URL so the client routes requests through OpenRouter properly.
-
-   * **Windows (PowerShell):**
-     ```powershell
-     $env:OPENROUTER_API_KEY="your-openrouter-api-key-here"
-     ```
-
-   * **Mac / Linux (Bash / Zsh):**
-     ```bash
-     export OPENROUTER_API_KEY="your-openrouter-api-key-here"
-     ```
-
+3. **Configure Environment Variables:**  
+   Copy the `.env.example` template to create a `.env` file in the root directory, then add your OpenRouter API key and base URL:
+   ```env
+   OPENROUTER_API_KEY="your-openrouter-api-key-here"
+   ```
+   
 ---
 
-## Running the Pipeline in Order
+## Running the Pipeline
 
-Execute the pipeline modules sequentially to process your tickets from raw data to final analytics:
-1. Clean the input csv file (data.csv -> clean_data.csv)
+Execute the script to process your tickets from raw data to final analytics:
    ```bash
-   python pipeline.py
-   ```
-2. AI Enrichment & Triage
-   Processes the support records through the LLM and outputs `enriched_data.csv`.
-   ```bash
-   python ai_enrichment.py
-   ```  
-3. Generate analytics/report from the `enriched_data.csv`
-   ```bash
-   python reporting.py
+   python main.py
    ```
