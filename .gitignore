@@ -3,3 +3,4 @@ enriched_data.csv
 ticket_summary_report.csv
 venv/
 __pycache__/
+.env

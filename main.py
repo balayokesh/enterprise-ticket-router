@@ -1,6 +1,6 @@
 import sys
 import logging
-from pipeline import clean_support_data  # Adjust function name if named differently in your ingestion/pipeline module
+from pipeline import clean_support_data
 from ai_enrichment import enrich_support_tickets
 from reporting import generate_ticket_report
 
@@ -27,7 +27,7 @@ def main():
         logging.info("--- Step 3/3: Generating Executive Reports ---")
         generate_ticket_report()
         
-        logging.info("Pipeline execution completed successfully! 🎉")
+        logging.info("Pipeline execution completed successfully!")
         
     except Exception as e:
         logging.error(f"Pipeline failed with error: {e}", exc_info=True)
