@@ -6,6 +6,9 @@ from typing import Literal
 import pandas as pd
 from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field
+from dotenv import load_dotenv
+
+load_dotenv()
 
 MODEL = "meta-llama/llama-3.3-70b-instruct"
 

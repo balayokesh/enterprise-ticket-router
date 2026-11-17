@@ -28,19 +28,12 @@ A robust, production-grade Python data pipeline that ingests customer support ti
    pip install -r requirements.txt
    ```
 
-3. **Configure Environment Variables:**
-   Set your OpenRouter API key and the OpenAI base URL so the client routes requests through OpenRouter properly.
-
-   * **Windows (PowerShell):**
-     ```powershell
-     $env:OPENROUTER_API_KEY="your-openrouter-api-key-here"
-     ```
-
-   * **Mac / Linux (Bash / Zsh):**
-     ```bash
-     export OPENROUTER_API_KEY="your-openrouter-api-key-here"
-     ```
-
+3. **Configure Environment Variables:**  
+   Copy the `.env.example` template to create a `.env` file in the root directory, then add your OpenRouter API key and base URL:
+   ```env
+   OPENROUTER_API_KEY="your-openrouter-api-key-here"
+   ```
+   
 ---
 
 ## Running the Pipeline
