@@ -2,6 +2,7 @@ import os
 import re
 import json
 import asyncio
+import time
 from typing import Literal
 
 import pandas as pd
@@ -14,7 +15,10 @@ load_dotenv()
 
 MODEL = "meta-llama/llama-3.3-70b-instruct"
 
-# Initialize the Async OpenRouter client
+# Approximate OpenRouter pricing for Llama 3.3 70B (per 1M tokens)
+COST_PER_PROMPT_TOKEN = 0.70 / 1_000_000
+COST_PER_COMPLETION_TOKEN = 0.90 / 1_000_000
+
 client = AsyncOpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.getenv("OPENROUTER_API_KEY"),
@@ -55,24 +59,14 @@ def parse_llm_json(raw: str) -> dict:
         )
         return json.loads(repaired)
 
-def extract_content(response) -> str:
-    """Pull the message text out of the response and sanity-check it."""
-    choice = response.choices[0]
-    if choice.finish_reason == "length":
-        raise ValueError("Response was truncated (finish_reason='length')")
-    content = choice.message.content
-    if not content:
-        raise ValueError("Empty response from model")
-    return content
-
-# Retry decorator for handling rate limits (429) or temporary server errors
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10),
     retry=retry_if_exception_type((Exception,))
 )
-async def async_triage_ticket(prompt: str, semaphore: asyncio.Semaphore) -> TicketTriage:
+async def async_triage_ticket(prompt: str, semaphore: asyncio.Semaphore):
     async with semaphore:
+        req_start = time.perf_counter()
         response = await client.chat.completions.create(
             model=MODEL,
             messages=[{"role": "user", "content": prompt}],
@@ -80,25 +74,41 @@ async def async_triage_ticket(prompt: str, semaphore: asyncio.Semaphore) -> Tick
             temperature=0.1,
             max_tokens=300,
         )
-        raw_content = extract_content(response)
-        data = parse_llm_json(raw_content)
+        req_latency = time.perf_counter() - req_start
 
-    # Normalize casing for string fields (e.g. "medium" -> "Medium")
-    for key in ("ai_urgency", "ai_category", "summary_sentiment"):
-        if isinstance(data.get(key), str):
-            data[key] = data[key].strip().capitalize()
+        choice = response.choices[0]
+        if choice.finish_reason == "length":
+            raise ValueError("Response was truncated (finish_reason='length')")
+        content = choice.message.content
+        if not content:
+            raise ValueError("Empty response from model")
 
-        return TicketTriage.model_validate(data)
+        data = parse_llm_json(content)
+
+        for key in ("ai_urgency", "ai_category", "summary_sentiment"):
+            if isinstance(data.get(key), str):
+                data[key] = data[key].strip().capitalize()
+
+        triage_obj = TicketTriage.model_validate(data)
+
+        usage = response.usage
+        telemetry = {
+            "prompt_tokens": usage.prompt_tokens if usage else 0,
+            "completion_tokens": usage.completion_tokens if usage else 0,
+            "total_tokens": usage.total_tokens if usage else 0,
+            "latency_sec": round(req_latency, 3),
+        }
+        return triage_obj, telemetry
 
 def build_prompt(product: str, subject: str, description: str) -> str:
     return f"""
     Analyze the following customer support ticket and return a VALID JSON object.
-    CRITICAL: Every string value must be in double quotes, and boolean must be lowercase with NO quotes (true/false).
+    CRITICAL: Every string value must be in double quotes, and boolean must be lowercase true/false.
 
     Use EXACTLY these four keys:
     - "ai_urgency": "High", "Medium", or "Low"
     - "ai_category": "Billing", "Technical", "Hardware", "Account", or "Security"
-    - "requires_immediate_escalation": true or false (boolean, not a string)
+    - "requires_immediate_escalation": true or false
     - "summary_sentiment": "Frustrated", "Neutral", or "Satisfied"
 
     Product: {product}
@@ -107,63 +117,114 @@ def build_prompt(product: str, subject: str, description: str) -> str:
     """
 
 async def process_single_ticket(index, row, semaphore):
+    ticket_id = row.get("Ticket ID", index)
     product = clean_text(row.get("Product Purchased", row.get("ProductPurchased")), "Unknown Product")
     subject = clean_text(row.get("Ticket Subject"), "General Inquiry")
     description = clean_text(row.get("Ticket Description"), "")
     prompt = build_prompt(product, subject, description)
 
     try:
-        triage = await async_triage_ticket(prompt, semaphore)
+        triage, telemetry = await async_triage_ticket(prompt, semaphore)
+        cost = (telemetry["prompt_tokens"] * COST_PER_PROMPT_TOKEN) + (
+            telemetry["completion_tokens"] * COST_PER_COMPLETION_TOKEN
+        )
         return index, {
-            "AI_Urgency": triage.ai_urgency,
-            "AI_Category": triage.ai_category,
-            "AI_Escalate": triage.requires_immediate_escalation,
-            "AI_Sentiment": triage.summary_sentiment,
+            "business": {
+                "AI_Urgency": triage.ai_urgency,
+                "AI_Category": triage.ai_category,
+                "AI_Escalate": triage.requires_immediate_escalation,
+                "AI_Sentiment": triage.summary_sentiment,
+            },
+            "telemetry": {
+                "Ticket ID": ticket_id,
+                "Model": MODEL,
+                "Status": "Success",
+                "Latency_Sec": telemetry["latency_sec"],
+                "Prompt_Tokens": telemetry["prompt_tokens"],
+                "Completion_Tokens": telemetry["completion_tokens"],
+                "Total_Tokens": telemetry["total_tokens"],
+                "Estimated_Cost_USD": round(cost, 6),
+            },
         }
     except Exception as e:
         print(f"Error processing row {index}: {e}")
         return index, {
-            "AI_Urgency": "Error",
-            "AI_Category": "Error",
-            "AI_Escalate": False,
-            "AI_Sentiment": "Error",
+            "business": {
+                "AI_Urgency": "Error",
+                "AI_Category": "Error",
+                "AI_Escalate": False,
+                "AI_Sentiment": "Error",
+            },
+            "telemetry": {
+                "Ticket ID": ticket_id,
+                "Model": MODEL,
+                "Status": f"Failed: {type(e).__name__}",
+                "Latency_Sec": 0.0,
+                "Prompt_Tokens": 0,
+                "Completion_Tokens": 0,
+                "Total_Tokens": 0,
+                "Estimated_Cost_USD": 0.0,
+            },
         }
 
-async def async_enrich_pipeline(input_path="clean_data.csv", output_path="enriched_data.csv", limit=5):
+async def async_enrich_pipeline(
+    input_path="clean_data.csv",
+    output_path="enriched_data.csv",
+    telemetry_path="telemetry_metrics.csv",
+    limit=5,
+):
     print("Loading cleaned dataset...")
     df = pd.read_csv(input_path)
     subset = df.head(limit).copy()
 
-    # Limit concurrency to 5 simultaneous requests to respect rate limits
     semaphore = asyncio.Semaphore(5)
+    print(f"Processing {len(subset)} tickets asynchronously with decoupled telemetry...")
 
-    print(f"Processing {len(subset)} tickets asynchronously via OpenRouter...")
-    tasks = [
-        process_single_ticket(index, row, semaphore)
-        for index, row in subset.iterrows()
-    ]
-
+    wall_start = time.perf_counter()
+    tasks = [process_single_ticket(index, row, semaphore) for index, row in subset.iterrows()]
     results = await asyncio.gather(*tasks)
+    wall_duration = time.perf_counter() - wall_start
 
-    # Map results back to dataframe
-    urgencies, categories, escalations, sentiments = [], [], [], []
-    for _, res in results:
-        urgencies.append(res["AI_Urgency"])
-        categories.append(res["AI_Category"])
-        escalations.append(res["AI_Escalate"])
-        sentiments.append(res["AI_Sentiment"])
+    sorted_results = [res for _, res in sorted(results, key=lambda x: x[0])]
 
-    subset["AI_Urgency"] = urgencies
-    subset["AI_Category"] = categories
-    subset["AI_Escalate"] = escalations
-    subset["AI_Sentiment"] = sentiments
-
+    # 1. Populate clean business output DataFrame
+    subset["AI_Urgency"] = [r["business"]["AI_Urgency"] for r in sorted_results]
+    subset["AI_Category"] = [r["business"]["AI_Category"] for r in sorted_results]
+    subset["AI_Escalate"] = [r["business"]["AI_Escalate"] for r in sorted_results]
+    subset["AI_Sentiment"] = [r["business"]["AI_Sentiment"] for r in sorted_results]
     subset.to_csv(output_path, index=False)
-    print(f"AI enrichment complete! Saved output to {output_path}")
-    print(subset[["Ticket ID", "AI_Urgency", "AI_Category", "AI_Escalate", "AI_Sentiment"]])
 
-def enrich_support_tickets(input_path="clean_data.csv", output_path="enriched_data.csv", limit=5):
-    asyncio.run(async_enrich_pipeline(input_path, output_path, limit))
+    # 2. Populate separate operational telemetry DataFrame
+    telemetry_df = pd.DataFrame([r["telemetry"] for r in sorted_results])
+    telemetry_df.to_csv(telemetry_path, index=False)
+
+    # 3. Log aggregate summary
+    total_prompt = telemetry_df["Prompt_Tokens"].sum()
+    total_completion = telemetry_df["Completion_Tokens"].sum()
+    total_tokens = telemetry_df["Total_Tokens"].sum()
+    total_cost = telemetry_df["Estimated_Cost_USD"].sum()
+
+    print("\n" + "=" * 52)
+    print("PIPELINE TELEMETRY & PERFORMANCE SUMMARY")
+    print("=" * 52)
+    print(f"• Tickets Processed       : {len(subset)}")
+    print(f"• Wall-Clock Duration     : {wall_duration:.2f} s")
+    print(f"• Avg Latency / Request   : {telemetry_df['Latency_Sec'].mean():.2f} s")
+    print(f"• Total Prompt Tokens     : {total_prompt:,}")
+    print(f"• Total Completion Tokens : {total_completion:,}")
+    print(f"• Grand Total Tokens      : {total_tokens:,}")
+    print(f"• Estimated Total Cost    : ${total_cost:.6f}")
+    print("=" * 52)
+    print(f"Saved clean business data to : {output_path}")
+    print(f"Saved operational metrics to : {telemetry_path}")
+
+def enrich_support_tickets(
+    input_path="clean_data.csv",
+    output_path="enriched_data.csv",
+    telemetry_path="telemetry_metrics.csv",
+    limit=5,
+):
+    asyncio.run(async_enrich_pipeline(input_path, output_path, telemetry_path, limit))
 
 if __name__ == "__main__":
     enrich_support_tickets()
