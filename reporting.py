@@ -15,23 +15,23 @@ def generate_ticket_report(input_path="enriched_data.csv", output_summary_path="
     # 1. Escalation Summary
     if 'AI_Escalate' in df.columns:
         escalations = df['AI_Escalate'].sum()
-        print(f"\n🚨 Immediate Escalations Required: {escalations} out of {total_tickets}")
+        print(f"\nImmediate Escalations Required: {escalations} out of {total_tickets}")
     
     # 2. Urgency Breakdown
     if 'AI_Urgency' in df.columns:
-        print("\n📊 Breakdown by Urgency:")
+        print("\nBreakdown by Urgency:")
         urgency_counts = df['AI_Urgency'].value_counts()
         print(urgency_counts.to_string())
         
     # 3. Category Breakdown
     if 'AI_Category' in df.columns:
-        print("\n🏷️ Breakdown by Category:")
+        print("\nBreakdown by Category:")
         category_counts = df['AI_Category'].value_counts()
         print(category_counts.to_string())
         
     # 4. Sentiment Distribution
     if 'AI_Sentiment' in df.columns:
-        print("\n💬 Customer Sentiment Analysis:")
+        print("\nCustomer Sentiment Analysis:")
         sentiment_counts = df['AI_Sentiment'].value_counts()
         print(sentiment_counts.to_string())
         
