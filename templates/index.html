@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Support Ticket Triage & LLMOps Telemetry</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --surface-2: #0b1220;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --border: #334155;
+            --accent: #38bdf8;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1360px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 0.9rem;
+            margin-top: 2px;
+        }
+
+        .run-form {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .run-form label {
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        input,
+        select,
+        button {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+        }
+
+        button {
+            background: var(--accent);
+            color: #06131e;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            opacity: 0.92;
+        }
+
+        button.secondary {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            font-weight: 500;
+        }
+
+        .flash {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+
+        .flash.success {
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid var(--success);
+            color: #bbf7d0;
+        }
+
+        .flash.error {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--danger);
+            color: #fecaca;
+        }
+
+        .kpis {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .kpi-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .kpi-label {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--muted);
+        }
+
+        .kpi-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 4px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .tab-btn {
+            background: var(--surface);
+            color: var(--muted);
+            border: 1px solid var(--border);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            color: #06131e;
+            border-color: var(--accent);
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+            display: none;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .checkbox-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.88rem;
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface-2);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.86rem;
+        }
+
+        th,
+        td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+            white-space: nowrap;
+            max-width: 340px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        th {
+            background: #131c31;
+            color: var(--muted);
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            font-weight: 600;
+        }
+
+        .badge-high,
+        .badge-true {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+
+        .badge-medium {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fcd34d;
+        }
+
+        .badge-low,
+        .badge-false {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+        }
+
+        .empty {
+            padding: 32px;
+            text-align: center;
+            color: var(--muted);
+        }
+
+        .note {
+            font-size: 0.82rem;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Enterprise AI Support Ticket Triage</h1>
+                <div class="subtitle">Decoupled Business Triage (<code>enriched_data.csv</code>) & LLMOps Telemetry
+                    (<code>telemetry_metrics.csv</code>)</div>
+            </div>
+            {% if has_input_csv %}
+            <form class="run-form" action="{{ url_for('run_pipeline') }}" method="POST">
+                <label for="limit">Batch Limit:</label>
+                <input id="limit" name="limit" type="number" min="1" max="25" value="5" style="width: 72px;" />
+                <button type="submit">Run Pipeline</button>
+            </form>
+            {% endif %}
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <section class="kpis">
+            <div class="kpi-card">
+                <div class="kpi-label">Triaged Tickets</div>
+                <div class="kpi-value">{{ total_tickets }}</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">High Urgency</div>
+                <div class="kpi-value">{{ high_urgency_count }}</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Immediate Escalations</div>
+                <div class="kpi-value">{{ escalation_count }}</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Total Tokens</div>
+                <div class="kpi-value">{{ "{:,}".format(total_tokens) }}</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Avg Latency</div>
+                <div class="kpi-value">{{ "%.2f"|format(avg_latency) }}s</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Est. Cost (USD)</div>
+                <div class="kpi-value">${{ "%.6f"|format(total_cost) }}</div>
+            </div>
+        </section>
+
+        <div class="tabs">
+            <button type="button" class="tab-btn active" onclick="switchTab('triage', this)">
+                Triage Results ({{ filtered_count }})
+            </button>
+            <button type="button" class="tab-btn" onclick="switchTab('telemetry', this)">
+                LLMOps Telemetry ({{ telemetry_rows|length }})
+            </button>
+        </div>
+
+        <!-- Tab 1: Clean Business Triage Output -->
+        <section id="panel-triage" class="panel active">
+            <form class="filters" method="GET" action="{{ url_for('index') }}">
+                <input type="text" name="q" value="{{ search_query }}"
+                    placeholder="Search ID, subject, description..." />
+                <select name="urgency">
+                    <option value="">All Urgencies</option>
+                    {% for opt in urgency_options %}
+                    <option value="{{ opt }}" {% if selected_urgency==opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+                <select name="category">
+                    <option value="">All Categories</option>
+                    {% for opt in category_options %}
+                    <option value="{{ opt }}" {% if selected_category==opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+                <select name="sentiment">
+                    <option value="">All Sentiments</option>
+                    {% for opt in sentiment_options %}
+                    <option value="{{ opt }}" {% if selected_sentiment==opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="escalate_only" value="1" {% if escalate_only %}checked{% endif %} />
+                    Escalations only
+                </label>
+                <button type="submit">Apply Filters</button>
+                <a href="{{ url_for('index') }}"><button type="button" class="secondary">Reset</button></a>
+            </form>
+
+            {% if triage_rows %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            {% for col in triage_columns %}
+                            <th>{{ col }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in triage_rows %}
+                        <tr>
+                            {% for col in triage_columns %}
+                            {% set val = row[col]|string %}
+                            <td title="{{ val }}">
+                                {% if col == 'AI_Urgency' %}
+                                <span class="badge badge-{{ val|lower }}">{{ val }}</span>
+                                {% elif col == 'AI_Escalate' %}
+                                <span class="badge badge-{{ val|lower }}">{{ val }}</span>
+                                {% else %}
+                                {{ val }}
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty">No triage records match the current view. Run the pipeline or reset filters.</div>
+            {% endif %}
+        </section>
+
+        <!-- Tab 2: Decoupled Operational Telemetry -->
+        <section id="panel-telemetry" class="panel">
+            <div class="note">Operational metrics are isolated from business domain outputs to keep downstream analytics
+                clean.</div>
+            {% if telemetry_rows %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            {% for col in telemetry_columns %}
+                            <th>{{ col }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in telemetry_rows %}
+                        <tr>
+                            {% for col in telemetry_columns %}
+                            {% set val = row[col]|string %}
+                            <td title="{{ val }}">{{ val }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty">No telemetry records available yet. Click <strong>Run Pipeline</strong> to generate
+                metrics.</div>
+            {% endif %}
+        </section>
+    </div>
+
+    <script>
+        function switchTab(tabName, btn) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('panel-' + tabName).classList.add('active');
+            btn.classList.add('active');
+        }
+    </script>
+</body>
+
+</html>
