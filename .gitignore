@@ -1,6 +1,8 @@
 clean_data.csv
 enriched_data.csv
 ticket_summary_report.csv
+telemetry_metrics.csv
+
 venv/
 __pycache__/
 .env

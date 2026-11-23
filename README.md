@@ -42,3 +42,6 @@ Execute the script to process your tickets from raw data to final analytics:
    ```bash
    python main.py
    ```
+
+## Architecture & Telemetry
+**Operational Telemetry (`telemetry_metrics.csv will be generated after execution`)**: Tracks LLMOps metrics per ticket, including API latency, prompt/completion token usage, model version, and estimated inference cost.
