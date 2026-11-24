@@ -1,17 +1,19 @@
 import os
+import tempfile
 import traceback
 from pathlib import Path
 
 import pandas as pd
 from flask import Flask, flash, redirect, render_template, request, url_for
+from werkzeug.utils import secure_filename
 
 from ai_enrichment import enrich_support_tickets
+from pipeline import clean_support_data
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-triage-dashboard-secret")
 
 BASE_DIR = Path(__file__).resolve().parent
-INPUT_CSV = BASE_DIR / "clean_data.csv"
 ENRICHED_CSV = BASE_DIR / "enriched_data.csv"
 TELEMETRY_CSV = BASE_DIR / "telemetry_metrics.csv"
 
@@ -113,15 +115,28 @@ def index():
         triage_columns=triage_columns,
         telemetry_rows=telemetry_rows,
         telemetry_columns=telemetry_columns,
-        has_input_csv=INPUT_CSV.exists(),
     )
+
+
+def _is_csv_filename(filename: str) -> bool:
+    return Path(filename).suffix.lower() == ".csv"
 
 
 @app.route("/run", methods=["POST"])
 def run_pipeline():
-    if not INPUT_CSV.exists():
-        flash(f"Input dataset not found at {INPUT_CSV.name}.", "error")
+    uploaded_file = request.files.get("csv_file")
+    if not uploaded_file or not uploaded_file.filename:
+        flash("Please select a .csv file to upload.", "error")
         return redirect(url_for("index"))
+
+    original_name = uploaded_file.filename.strip()
+    if not _is_csv_filename(original_name):
+        flash("Invalid file type. Only .csv files are allowed.", "error")
+        return redirect(url_for("index"))
+
+    safe_name = secure_filename(original_name) or "input.csv"
+    if not safe_name.lower().endswith(".csv"):
+        safe_name = f"{safe_name}.csv"
 
     try:
         raw_limit = request.form.get("limit", "5")
@@ -130,13 +145,28 @@ def run_pipeline():
         limit = 5
 
     try:
-        enrich_support_tickets(
-            input_path=str(INPUT_CSV),
-            output_path=str(ENRICHED_CSV),
-            telemetry_path=str(TELEMETRY_CSV),
-            limit=limit,
-        )
-        flash(f"Pipeline completed for {limit} ticket(s). Triage and telemetry views updated.", "success")
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            raw_csv_path = Path(tmp_dir) / safe_name
+            cleaned_csv_path = Path(tmp_dir) / f"cleaned_{safe_name}"
+            uploaded_file.save(raw_csv_path)
+
+            preview_df = pd.read_csv(raw_csv_path, nrows=1)
+            if preview_df.empty:
+                flash("Uploaded CSV file contains no rows.", "error")
+                return redirect(url_for("index"))
+
+            clean_support_data(
+                input_path=str(raw_csv_path),
+                output_path=str(cleaned_csv_path),
+            )
+
+            enrich_support_tickets(
+                input_path=str(cleaned_csv_path),
+                output_path=str(ENRICHED_CSV),
+                telemetry_path=str(TELEMETRY_CSV),
+                limit=limit,
+            )
+        flash(f"Pipeline completed for {limit} ticket(s) from {original_name}. Triage and telemetry views updated.", "success")
     except Exception as exc:
         traceback.print_exc()
         flash(f"Pipeline run failed: {exc}", "error")
