@@ -315,6 +315,155 @@
             color: #e2e8f0;
         }
 
+        .badge-review-pending {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fcd34d;
+        }
+
+        .badge-review-approved {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+        }
+
+        .badge-review-edited {
+            background: rgba(56, 189, 248, 0.18);
+            color: #bae6fd;
+        }
+
+        .review-summary {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+            font-size: 0.82rem;
+            color: var(--muted);
+        }
+
+        .review-summary-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 4px 10px;
+        }
+
+        .review-summary-count {
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .rag-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .citation-label {
+            font-size: 0.74rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .citation-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .citation-pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            line-height: 1.35;
+            background: rgba(56, 189, 248, 0.14);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            color: #bae6fd;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .citation-fallback {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            background: rgba(148, 163, 184, 0.14);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            color: var(--muted);
+        }
+
+        .reply-textarea {
+            width: 100%;
+            min-height: 120px;
+            resize: vertical;
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            line-height: 1.55;
+        }
+
+        .reply-textarea:focus {
+            outline: 2px solid var(--accent);
+            outline-offset: 1px;
+        }
+
+        .review-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn-approve {
+            background: var(--success);
+            color: #052e16;
+        }
+
+        .btn-edit {
+            background: var(--accent);
+            color: #06131e;
+        }
+
+        .review-actions button:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .review-feedback {
+            font-size: 0.84rem;
+            padding: 8px 10px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .review-feedback.is-success {
+            display: block;
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid var(--success);
+            color: #bbf7d0;
+        }
+
+        .review-feedback.is-error {
+            display: block;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--danger);
+            color: #fecaca;
+        }
+
         .drawer-backdrop {
             position: fixed;
             inset: 0;
@@ -514,6 +663,21 @@
 
         <!-- Tab 1: Clean Business Triage Output -->
         <section id="panel-triage" class="panel active">
+            <div class="review-summary" aria-label="Review queue summary">
+                <span class="review-summary-item">
+                    <span class="badge badge-review-pending">Pending Review</span>
+                    <span class="review-summary-count" id="count-pending">{{ review_counts.get('Pending Review', 0) }}</span>
+                </span>
+                <span class="review-summary-item">
+                    <span class="badge badge-review-approved">Approved &amp; Sent</span>
+                    <span class="review-summary-count" id="count-approved">{{ review_counts.get('Approved & Sent', 0) }}</span>
+                </span>
+                <span class="review-summary-item">
+                    <span class="badge badge-review-edited">Edited &amp; Sent</span>
+                    <span class="review-summary-count" id="count-edited">{{ review_counts.get('Edited & Sent', 0) }}</span>
+                </span>
+            </div>
+
             <form class="filters" method="GET" action="{{ url_for('index') }}">
                 <input type="text" name="q" value="{{ search_query }}"
                     placeholder="Search ID, subject, description..." />
@@ -535,6 +699,12 @@
                     <option value="{{ opt }}" {% if selected_sentiment==opt %}selected{% endif %}>{{ opt }}</option>
                     {% endfor %}
                 </select>
+                <select name="review_status" aria-label="Filter by Review Status">
+                    <option value="">All Review Statuses</option>
+                    {% for opt in review_status_options %}
+                    <option value="{{ opt }}" {% if selected_review_status==opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
                 <label class="checkbox-label">
                     <input type="checkbox" name="escalate_only" value="1" {% if escalate_only %}checked{% endif %} />
                     Escalations only
@@ -544,27 +714,37 @@
             </form>
 
             {% if triage_rows %}
-            <p class="note">Click a row to open the full ticket, including the untruncated description and AI triage.
+            <p class="note">Click a row to open the full ticket, review the RAG-grounded reply, and approve or edit before sending.
             </p>
             <div class="table-wrap">
                 <table>
                     <thead>
                         <tr>
                             {% for col in triage_columns %}
-                            <th>{{ col }}</th>
+                            <th>{{ 'Review Status' if col == 'Review_Status' else col }}</th>
                             {% endfor %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for row in triage_rows %}
-                        <tr class="ticket-row" data-index="{{ loop.index0 }}" tabindex="0">
+                        <tr class="ticket-row" data-index="{{ loop.index0 }}" data-ticket-id="{{ row.get('Ticket ID', '') }}" tabindex="0">
                             {% for col in triage_columns %}
                             {% set val = row[col]|string %}
-                            <td title="{{ val }}">
+                            <td title="{{ val }}" data-col="{{ col }}">
                                 {% if col == 'AI_Urgency' %}
                                 <span class="badge badge-{{ val|lower }}">{{ val }}</span>
                                 {% elif col == 'AI_Escalate' %}
                                 <span class="badge badge-{{ val|lower }}">{{ val }}</span>
+                                {% elif col == 'Review_Status' %}
+                                    {% if val == 'Approved & Sent' %}
+                                    <span class="badge badge-review-approved">{{ val }}</span>
+                                    {% elif val == 'Edited & Sent' %}
+                                    <span class="badge badge-review-edited">{{ val }}</span>
+                                    {% elif val == 'Pending Review' %}
+                                    <span class="badge badge-review-pending">{{ val }}</span>
+                                    {% else %}
+                                    <span class="badge badge-neutral-tone">{{ val }}</span>
+                                    {% endif %}
                                 {% else %}
                                 {{ val }}
                                 {% endif %}
@@ -628,6 +808,25 @@
                 <h3>Ticket Description</h3>
                 <div class="drawer-copy" id="drawer-description"></div>
             </section>
+            <section class="drawer-section" id="drawer-rag-section">
+                <h3>AI Recommended Reply (RAG-Grounded)</h3>
+                <div class="rag-card">
+                    <div>
+                        <div class="citation-label">Cited Runbooks</div>
+                        <div class="citation-list" id="drawer-citations"></div>
+                    </div>
+                    <div>
+                        <label class="citation-label" for="drawer-reply-textarea" style="display:block;">Draft Customer Reply</label>
+                        <textarea id="drawer-reply-textarea" class="reply-textarea" rows="5"
+                            placeholder="No suggested reply generated yet. Enter a customer reply before sending..."></textarea>
+                    </div>
+                    <div class="review-actions">
+                        <button type="button" id="btn-approve-reply" class="btn-approve">Approve &amp; Send</button>
+                        <button type="button" id="btn-edit-reply" class="btn-edit">Save Edit &amp; Send</button>
+                    </div>
+                    <div id="drawer-review-feedback" class="review-feedback" role="status" aria-live="polite"></div>
+                </div>
+            </section>
             <section class="drawer-section" id="drawer-reasoning-section" hidden>
                 <h3>Reasoning &amp; Summary</h3>
                 <div id="drawer-reasoning"></div>
@@ -648,18 +847,24 @@
             btn.classList.add('active');
         }
 
-        const BADGE_FIELDS = ["AI_Urgency", "AI_Category", "AI_Sentiment", "AI_Escalate"];
+        const BADGE_FIELDS = ["AI_Urgency", "AI_Category", "AI_Sentiment", "AI_Escalate", "Review_Status"];
         const BADGE_LABELS = {
             AI_Urgency: "Urgency",
             AI_Category: "Category",
             AI_Sentiment: "Sentiment",
-            AI_Escalate: "Escalate"
+            AI_Escalate: "Escalate",
+            Review_Status: "Review Status"
         };
         const REASONING_PATTERN = /(reason|rationale|summary|explanation)/i;
         const triageTickets = JSON.parse(document.getElementById("triage-payload").textContent || "[]");
         const drawer = document.getElementById("ticket-drawer");
         const backdrop = document.getElementById("drawer-backdrop");
+        const replyTextarea = document.getElementById("drawer-reply-textarea");
+        const approveBtn = document.getElementById("btn-approve-reply");
+        const editBtn = document.getElementById("btn-edit-reply");
+        const reviewFeedbackEl = document.getElementById("drawer-review-feedback");
         let lastFocusedRow = null;
+        let currentTicketIndex = null;
 
         function displayValue(value) {
             if (value === true) return "True";
@@ -668,8 +873,17 @@
             return String(value);
         }
 
+        function reviewBadgeClass(status) {
+            if (status === "Approved & Sent") return "badge badge-review-approved";
+            if (status === "Edited & Sent") return "badge badge-review-edited";
+            if (status === "Pending Review") return "badge badge-review-pending";
+            return "badge badge-neutral-tone";
+        }
+
         function badgeClass(field, value) {
-            const tone = displayValue(value).toLowerCase();
+            const raw = displayValue(value);
+            const tone = raw.toLowerCase();
+            if (field === "Review_Status") return reviewBadgeClass(raw);
             if (field === "AI_Urgency" || field === "AI_Escalate") return "badge badge-" + tone;
             if (field === "AI_Sentiment") {
                 if (tone === "frustrated") return "badge badge-high";
@@ -694,7 +908,41 @@
             return REASONING_PATTERN.test(name) && !BADGE_FIELDS.includes(name);
         }
 
-        function fillDrawer(ticket) {
+        function clearReviewFeedback() {
+            reviewFeedbackEl.textContent = "";
+            reviewFeedbackEl.className = "review-feedback";
+        }
+
+        function showReviewFeedback(message, type) {
+            reviewFeedbackEl.textContent = message;
+            reviewFeedbackEl.className = "review-feedback " + (type === "error" ? "is-error" : "is-success");
+        }
+
+        function renderCitations(citedRaw) {
+            const container = document.getElementById("drawer-citations");
+            container.replaceChildren();
+            const text = displayValue(citedRaw).trim();
+            const parts = (!text || text.toLowerCase() === "none")
+                ? []
+                : text.split("|").map((item) => item.trim()).filter(Boolean);
+
+            if (parts.length === 0) {
+                const fallback = document.createElement("span");
+                fallback.className = "citation-fallback";
+                fallback.textContent = "None cited — holding reply / manual review recommended";
+                container.append(fallback);
+                return;
+            }
+
+            parts.forEach((citation) => {
+                const pill = document.createElement("span");
+                pill.className = "citation-pill";
+                pill.textContent = citation;
+                container.append(pill);
+            });
+        }
+
+        function fillDrawer(ticket, options = {}) {
             const ticketId = fieldText(ticket, ["Ticket ID", "TicketID", "ID"]) || "Ticket";
             const subject = fieldText(ticket, ["Ticket Subject", "Subject"]) || "Support ticket";
             const product = fieldText(ticket, ["Product Purchased", "ProductPurchased", "Product"]);
@@ -706,6 +954,12 @@
             productEl.textContent = product;
             productEl.hidden = !product;
             document.getElementById("drawer-description").textContent = description || "No description recorded.";
+
+            renderCitations(fieldText(ticket, ["Cited_Sources"]));
+            replyTextarea.value = fieldText(ticket, ["Suggested_Reply"]);
+            if (!options.preserveFeedback) {
+                clearReviewFeedback();
+            }
 
             const badges = document.getElementById("drawer-badges");
             badges.replaceChildren();
@@ -728,7 +982,8 @@
                 "Ticket ID", "TicketID", "ID",
                 "Ticket Subject", "Subject",
                 "Product Purchased", "ProductPurchased", "Product",
-                "Ticket Description", "Description"
+                "Ticket Description", "Description",
+                "Suggested_Reply", "Cited_Sources"
             ]);
 
             const reasoning = document.getElementById("drawer-reasoning");
@@ -765,9 +1020,91 @@
             document.getElementById("drawer-meta-section").hidden = meta.childElementCount === 0;
         }
 
+        function updateTableRowReviewStatus(index, newStatus) {
+            const row = document.querySelector(`.ticket-row[data-index="${index}"]`);
+            if (!row) return;
+            const cell = row.querySelector('td[data-col="Review_Status"]');
+            if (!cell) return;
+            cell.setAttribute("title", newStatus);
+            const badge = document.createElement("span");
+            badge.className = reviewBadgeClass(newStatus);
+            badge.textContent = newStatus;
+            cell.replaceChildren(badge);
+        }
+
+        function updateReviewSummaryCounts(counts) {
+            if (!counts) return;
+            const pendingEl = document.getElementById("count-pending");
+            const approvedEl = document.getElementById("count-approved");
+            const editedEl = document.getElementById("count-edited");
+            if (pendingEl && counts["Pending Review"] !== undefined) pendingEl.textContent = counts["Pending Review"];
+            if (approvedEl && counts["Approved & Sent"] !== undefined) approvedEl.textContent = counts["Approved & Sent"];
+            if (editedEl && counts["Edited & Sent"] !== undefined) editedEl.textContent = counts["Edited & Sent"];
+        }
+
+        function setReviewButtonsDisabled(disabled) {
+            approveBtn.disabled = disabled;
+            editBtn.disabled = disabled;
+        }
+
+        async function submitReview(action) {
+            if (currentTicketIndex === null) return;
+            const ticket = triageTickets[currentTicketIndex];
+            if (!ticket) return;
+
+            const ticketId = fieldText(ticket, ["Ticket ID", "TicketID", "ID"]);
+            if (!ticketId) {
+                showReviewFeedback("Unable to determine Ticket ID for this record.", "error");
+                return;
+            }
+
+            const bodyPayload = { action };
+            if (action === "edit") {
+                const editedText = replyTextarea.value.trim();
+                if (!editedText) {
+                    showReviewFeedback("Please enter a non-empty reply before saving edits.", "error");
+                    replyTextarea.focus();
+                    return;
+                }
+                bodyPayload.suggested_reply = editedText;
+            }
+
+            setReviewButtonsDisabled(true);
+            clearReviewFeedback();
+
+            try {
+                const response = await fetch(`/tickets/${encodeURIComponent(ticketId)}/review`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(bodyPayload)
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    showReviewFeedback(data.error || `Failed to save review (HTTP ${response.status}).`, "error");
+                    return;
+                }
+
+                const updatedTicket = data.ticket || ticket;
+                triageTickets[currentTicketIndex] = updatedTicket;
+                fillDrawer(updatedTicket, { preserveFeedback: true });
+                updateTableRowReviewStatus(currentTicketIndex, displayValue(updatedTicket.Review_Status));
+                updateReviewSummaryCounts(data.review_counts);
+
+                const msg = action === "approve"
+                    ? "Reply approved and marked as Approved & Sent."
+                    : "Edited reply saved and marked as Edited & Sent.";
+                showReviewFeedback(msg, "success");
+            } catch (err) {
+                showReviewFeedback(`Network error saving review: ${err.message}`, "error");
+            } finally {
+                setReviewButtonsDisabled(false);
+            }
+        }
+
         function openDrawer(index, rowEl) {
             const ticket = triageTickets[index];
             if (!ticket) return;
+            currentTicketIndex = index;
             lastFocusedRow = rowEl || null;
             fillDrawer(ticket);
             drawer.inert = false;
@@ -784,8 +1121,12 @@
             drawer.setAttribute("aria-hidden", "true");
             drawer.inert = true;
             document.body.style.overflow = "";
+            currentTicketIndex = null;
             if (lastFocusedRow) lastFocusedRow.focus();
         }
+
+        approveBtn.addEventListener("click", () => submitReview("approve"));
+        editBtn.addEventListener("click", () => submitReview("edit"));
 
         document.querySelectorAll(".ticket-row").forEach((row) => {
             const index = Number(row.dataset.index);
