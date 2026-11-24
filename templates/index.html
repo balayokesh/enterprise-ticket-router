@@ -267,6 +267,164 @@
             color: var(--muted);
             margin-bottom: 12px;
         }
+
+        .ticket-row {
+            cursor: pointer;
+        }
+
+        .ticket-row:hover td {
+            background: rgba(56, 189, 248, 0.08);
+        }
+
+        .ticket-row:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
+        }
+
+        .badge-category {
+            background: rgba(56, 189, 248, 0.18);
+            color: #bae6fd;
+        }
+
+        .badge-neutral-tone {
+            background: rgba(148, 163, 184, 0.2);
+            color: #e2e8f0;
+        }
+
+        .drawer-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.66);
+            z-index: 40;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .drawer-backdrop.is-open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            width: min(560px, 100%);
+            height: 100%;
+            background: var(--surface);
+            border-left: 1px solid var(--border);
+            box-shadow: -18px 0 48px rgba(0, 0, 0, 0.4);
+            transform: translateX(100%);
+            transition: transform 0.22s ease;
+        }
+
+        .drawer.is-open {
+            transform: translateX(0);
+        }
+
+        .drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 20px 20px 12px;
+        }
+
+        .drawer-kicker {
+            color: var(--accent);
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .drawer-header h2 {
+            font-size: 1.2rem;
+            line-height: 1.35;
+            margin-top: 4px;
+            white-space: normal;
+        }
+
+        .drawer-product {
+            color: var(--muted);
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        .drawer-close {
+            flex-shrink: 0;
+        }
+
+        .drawer-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 0 20px 16px;
+        }
+
+        .badge-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 92px;
+        }
+
+        .badge-caption {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--muted);
+        }
+
+        .drawer-body {
+            overflow-y: auto;
+            padding: 4px 20px 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .drawer-section h3 {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .drawer-copy {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .drawer-meta {
+            display: grid;
+            grid-template-columns: minmax(120px, 38%) 1fr;
+            gap: 8px 12px;
+            margin: 0;
+        }
+
+        .drawer-meta dt {
+            color: var(--muted);
+            font-size: 0.8rem;
+        }
+
+        .drawer-meta dd {
+            margin: 0;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            font-size: 0.88rem;
+        }
     </style>
 </head>
 
@@ -363,6 +521,8 @@
             </form>
 
             {% if triage_rows %}
+            <p class="note">Click a row to open the full ticket, including the untruncated description and AI triage.
+            </p>
             <div class="table-wrap">
                 <table>
                     <thead>
@@ -374,7 +534,7 @@
                     </thead>
                     <tbody>
                         {% for row in triage_rows %}
-                        <tr>
+                        <tr class="ticket-row" data-index="{{ loop.index0 }}" tabindex="0">
                             {% for col in triage_columns %}
                             {% set val = row[col]|string %}
                             <td title="{{ val }}">
@@ -399,8 +559,6 @@
 
         <!-- Tab 2: Decoupled Operational Telemetry -->
         <section id="panel-telemetry" class="panel">
-            <div class="note">Operational metrics are isolated from business domain outputs to keep downstream analytics
-                clean.</div>
             {% if telemetry_rows %}
             <div class="table-wrap">
                 <table>
@@ -430,6 +588,35 @@
         </section>
     </div>
 
+    <div id="drawer-backdrop" class="drawer-backdrop"></div>
+    <aside id="ticket-drawer" class="drawer" role="dialog" aria-modal="true" aria-hidden="true" inert
+        aria-labelledby="drawer-title">
+        <div class="drawer-header">
+            <div>
+                <div class="drawer-kicker" id="drawer-kicker"></div>
+                <h2 id="drawer-title"></h2>
+                <div class="drawer-product" id="drawer-product"></div>
+            </div>
+            <button type="button" id="drawer-close" class="secondary drawer-close">Close</button>
+        </div>
+        <div class="drawer-badges" id="drawer-badges"></div>
+        <div class="drawer-body">
+            <section class="drawer-section" id="drawer-description-section">
+                <h3>Ticket Description</h3>
+                <div class="drawer-copy" id="drawer-description"></div>
+            </section>
+            <section class="drawer-section" id="drawer-reasoning-section" hidden>
+                <h3>Reasoning &amp; Summary</h3>
+                <div id="drawer-reasoning"></div>
+            </section>
+            <section class="drawer-section" id="drawer-meta-section">
+                <h3>Ticket Fields</h3>
+                <dl class="drawer-meta" id="drawer-meta"></dl>
+            </section>
+        </div>
+    </aside>
+    <script type="application/json" id="triage-payload">{{ triage_rows|tojson }}</script>
+
     <script>
         function switchTab(tabName, btn) {
             document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -437,6 +624,162 @@
             document.getElementById('panel-' + tabName).classList.add('active');
             btn.classList.add('active');
         }
+
+        const BADGE_FIELDS = ["AI_Urgency", "AI_Category", "AI_Sentiment", "AI_Escalate"];
+        const BADGE_LABELS = {
+            AI_Urgency: "Urgency",
+            AI_Category: "Category",
+            AI_Sentiment: "Sentiment",
+            AI_Escalate: "Escalate"
+        };
+        const REASONING_PATTERN = /(reason|rationale|summary|explanation)/i;
+        const triageTickets = JSON.parse(document.getElementById("triage-payload").textContent || "[]");
+        const drawer = document.getElementById("ticket-drawer");
+        const backdrop = document.getElementById("drawer-backdrop");
+        let lastFocusedRow = null;
+
+        function displayValue(value) {
+            if (value === true) return "True";
+            if (value === false) return "False";
+            if (value === null || value === undefined) return "";
+            return String(value);
+        }
+
+        function badgeClass(field, value) {
+            const tone = displayValue(value).toLowerCase();
+            if (field === "AI_Urgency" || field === "AI_Escalate") return "badge badge-" + tone;
+            if (field === "AI_Sentiment") {
+                if (tone === "frustrated") return "badge badge-high";
+                if (tone === "satisfied") return "badge badge-low";
+                if (tone === "neutral") return "badge badge-medium";
+                return "badge badge-neutral-tone";
+            }
+            if (field === "AI_Category") return "badge badge-category";
+            return "badge";
+        }
+
+        function fieldText(ticket, names) {
+            for (const name of names) {
+                if (Object.prototype.hasOwnProperty.call(ticket, name)) {
+                    return displayValue(ticket[name]);
+                }
+            }
+            return "";
+        }
+
+        function isReasoningField(name) {
+            return REASONING_PATTERN.test(name) && !BADGE_FIELDS.includes(name);
+        }
+
+        function fillDrawer(ticket) {
+            const ticketId = fieldText(ticket, ["Ticket ID", "TicketID", "ID"]) || "Ticket";
+            const subject = fieldText(ticket, ["Ticket Subject", "Subject"]) || "Support ticket";
+            const product = fieldText(ticket, ["Product Purchased", "ProductPurchased", "Product"]);
+            const description = fieldText(ticket, ["Ticket Description", "Description"]);
+
+            document.getElementById("drawer-kicker").textContent = ticketId;
+            document.getElementById("drawer-title").textContent = subject;
+            const productEl = document.getElementById("drawer-product");
+            productEl.textContent = product;
+            productEl.hidden = !product;
+            document.getElementById("drawer-description").textContent = description || "No description recorded.";
+
+            const badges = document.getElementById("drawer-badges");
+            badges.replaceChildren();
+            BADGE_FIELDS.forEach((field) => {
+                if (!Object.prototype.hasOwnProperty.call(ticket, field)) return;
+                const group = document.createElement("div");
+                group.className = "badge-group";
+                const caption = document.createElement("span");
+                caption.className = "badge-caption";
+                caption.textContent = BADGE_LABELS[field];
+                const badge = document.createElement("span");
+                badge.className = badgeClass(field, ticket[field]);
+                badge.textContent = displayValue(ticket[field]) || "—";
+                group.append(caption, badge);
+                badges.append(group);
+            });
+
+            const shown = new Set([
+                ...BADGE_FIELDS,
+                "Ticket ID", "TicketID", "ID",
+                "Ticket Subject", "Subject",
+                "Product Purchased", "ProductPurchased", "Product",
+                "Ticket Description", "Description"
+            ]);
+
+            const reasoning = document.getElementById("drawer-reasoning");
+            const reasoningSection = document.getElementById("drawer-reasoning-section");
+            reasoning.replaceChildren();
+            let reasoningCount = 0;
+            Object.keys(ticket).forEach((name) => {
+                if (!isReasoningField(name)) return;
+                shown.add(name);
+                const block = document.createElement("div");
+                block.className = "drawer-copy";
+                block.style.marginBottom = "10px";
+                const label = document.createElement("strong");
+                label.textContent = name;
+                const body = document.createElement("div");
+                body.textContent = displayValue(ticket[name]) || "—";
+                block.append(label, body);
+                reasoning.append(block);
+                reasoningCount += 1;
+            });
+            reasoningSection.hidden = reasoningCount === 0;
+
+            const meta = document.getElementById("drawer-meta");
+            meta.replaceChildren();
+            Object.keys(ticket).forEach((name) => {
+                if (shown.has(name)) return;
+                const term = document.createElement("dt");
+                term.textContent = name;
+                const detail = document.createElement("dd");
+                const value = displayValue(ticket[name]);
+                detail.textContent = value || "—";
+                meta.append(term, detail);
+            });
+            document.getElementById("drawer-meta-section").hidden = meta.childElementCount === 0;
+        }
+
+        function openDrawer(index, rowEl) {
+            const ticket = triageTickets[index];
+            if (!ticket) return;
+            lastFocusedRow = rowEl || null;
+            fillDrawer(ticket);
+            drawer.inert = false;
+            backdrop.classList.add("is-open");
+            drawer.classList.add("is-open");
+            drawer.setAttribute("aria-hidden", "false");
+            document.body.style.overflow = "hidden";
+            document.getElementById("drawer-close").focus();
+        }
+
+        function closeDrawer() {
+            backdrop.classList.remove("is-open");
+            drawer.classList.remove("is-open");
+            drawer.setAttribute("aria-hidden", "true");
+            drawer.inert = true;
+            document.body.style.overflow = "";
+            if (lastFocusedRow) lastFocusedRow.focus();
+        }
+
+        document.querySelectorAll(".ticket-row").forEach((row) => {
+            const index = Number(row.dataset.index);
+            row.addEventListener("click", () => openDrawer(index, row));
+            row.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openDrawer(index, row);
+                }
+            });
+        });
+
+        document.getElementById("drawer-close").addEventListener("click", closeDrawer);
+        backdrop.addEventListener("click", closeDrawer);
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && drawer.classList.contains("is-open")) closeDrawer();
+        });
     </script>
 </body>
 
