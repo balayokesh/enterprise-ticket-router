@@ -61,7 +61,7 @@ def retrieve_relevant_runbooks(
 
     try:
         query_vec = embed_query(query_text)
-        with psycopg.connect(DATABASE_URL) as conn:
+        with psycopg.connect(DATABASE_URL, connect_timeout=5) as conn:
             register_vector(conn)
             rows = conn.execute(
                 """
